@@ -1,7 +1,9 @@
 import { useEffect, useState, useRef } from "react";
+// import { auth } from "./firebase";
 import { onAuthStateChanged } from "firebase/auth";
 import { ref, onValue, push, update } from "firebase/database";
-import { db, auth } from "./firebase";
+// import db from "./firebase";
+import { db, auth } from "./firebase"; // ✅ Named import
 import io from "socket.io-client";
 
 import LoginPage from "./components/LoginPage";
@@ -14,6 +16,7 @@ const socket = io("http://localhost:5000");
 
 function App() {
   const [authUser, setAuthUser] = useState(null);
+  const [authMode, setAuthMode] = useState("login");
   const [onlineUsers, setOnlineUsers] = useState([]);
   const [selectedUser, setSelectedUser] = useState("");
   const [message, setMessage] = useState("");
@@ -27,19 +30,19 @@ function App() {
   const messageInputRef = useRef(null);
   const emojiPickerRef = useRef(null);
 
+  // 🔁 Watch Firebase Auth
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      setAuthUser(user);
-      if (user && user.displayName) {
-        socket.emit("set_username", { username: user.displayName });
-      }
-    });
-    return () => unsubscribe();
-  }, []);
+  const unsubscribe = onAuthStateChanged(auth, (user) => {
+    setAuthUser(user);
+    if (user) {
+      socket.emit("set_username", { username: user.displayName });
+    }
+  });
+  return () => unsubscribe();
+}, []);
+
 
   useEffect(() => {
-    if (!authUser) return;
-
     socket.on("online_users", (users) => {
       setOnlineUsers(users);
     });
@@ -51,18 +54,25 @@ function App() {
     socket.on("messages_seen_ack", ({ seenFrom }) => {
       setChat((prev) =>
         prev.map((msg) =>
-          msg.from === authUser.displayName && msg.to === seenFrom
+          msg.from === authUser?.displayName && msg.to === seenFrom
             ? { ...msg, seen: true }
             : msg
         )
       );
+
+      chat.forEach((msg) => {
+        if (msg.from === authUser?.displayName && msg.to === seenFrom && !msg.seen) {
+          const msgRef = ref(db, `messages/${msg.key}`);
+          update(msgRef, { seen: true });
+        }
+      });
     });
 
     const messagesRef = ref(db, "messages");
     onValue(messagesRef, (snapshot) => {
       const data = snapshot.val();
       const counts = {};
-      if (data) {
+      if (data && authUser?.displayName) {
         Object.values(data).forEach((msg) => {
           if (msg.to === authUser.displayName && !msg.seen) {
             counts[msg.from] = (counts[msg.from] || 0) + 1;
@@ -77,7 +87,7 @@ function App() {
       socket.off("typing");
       socket.off("messages_seen_ack");
     };
-  }, [authUser]);
+  }, [chat, authUser]);
 
   function sendMessage() {
     if (!message.trim() || !selectedUser) return;
@@ -165,39 +175,68 @@ function App() {
     update(msgRef, { reactions: updatedReactions });
   }
 
-  if (!authUser) {
-    return <LoginPage onLoginSuccess={(user) => setAuthUser(user)} />;
+  function addEmojiToMessage(emoji) {
+    setMessage((prev) => prev + emoji);
   }
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (
+        emojiPickerRef.current &&
+        !emojiPickerRef.current.contains(event.target) &&
+        event.target !== messageInputRef.current &&
+        event.target.getAttribute("id") !== "emoji-toggle-btn"
+      ) {
+        setShowEmojiPicker(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   return (
     <div className="app">
-      <OnlineUsers
-        users={onlineUsers}
-        onSelectUser={handleUserSelect}
-        unreadCounts={unreadCounts}
-        currentUser={authUser?.displayName}
-      />
+      {!authUser ? (
+        authMode === "signup" ? (
+          <SignupPage onSignupSuccess={() => setAuthMode("login")} />
+        ) : (
+          <LoginPage onLoginSuccess={(user) => setAuthUser(user)} />
 
-      <ChatArea
-        selectedUser={selectedUser}
-        messages={chat}
-        onSend={sendMessage}
-        onChangeMessage={setMessage}
-        message={message}
-        typingUsers={typingUsers}
-        onStartEditing={startEditing}
-        onDelete={deleteMessage}
-        onSaveEdit={saveEditedMessage}
-        onCancelEdit={cancelEditing}
-        onEditChange={setEditingMessageText}
-        editingMessageId={editingMessageId}
-        editingMessageText={editingMessageText}
-        showEmojiPicker={showEmojiPicker}
-        setShowEmojiPicker={setShowEmojiPicker}
-        messageInputRef={messageInputRef}
-        emojiPickerRef={emojiPickerRef}
-        onReact={toggleReaction}
-      />
+        )
+      ) : (
+        <div className="flex">
+          <OnlineUsers
+            onlineUsers={onlineUsers}
+            currentUsername={authUser.displayName}
+            selectedUser={selectedUser}
+            onSelectUser={handleUserSelect}
+            unreadCounts={unreadCounts}
+          />
+          <ChatArea
+            chat={chat}
+            selectedUser={selectedUser}
+            username={authUser.displayName}
+            editingMessageId={editingMessageId}
+            editingMessageText={editingMessageText}
+            setEditingMessageText={setEditingMessageText}
+            startEditing={startEditing}
+            cancelEditing={cancelEditing}
+            saveEditedMessage={saveEditedMessage}
+            deleteMessage={deleteMessage}
+            toggleReaction={toggleReaction}
+            message={message}
+            setMessage={setMessage}
+            sendMessage={sendMessage}
+            typingUsers={typingUsers}
+            showEmojiPicker={showEmojiPicker}
+            setShowEmojiPicker={setShowEmojiPicker}
+            addEmojiToMessage={addEmojiToMessage}
+            messageInputRef={messageInputRef}
+            emojiPickerRef={emojiPickerRef}
+          />
+        </div>
+      )}
+      
     </div>
   );
 }
