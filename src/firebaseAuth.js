@@ -49,7 +49,7 @@ export const googleLogin = async () => {
         }
 
         // Redirect to chat page or another page
-       
+        window.location.href = "https://bolochat.netlify.app/"; // Change this to your chat page route
     } catch (error) {
         console.error("Error during Google login:", error);
         alert("Error: " + error.message);
