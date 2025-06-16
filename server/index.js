@@ -3,12 +3,11 @@ const express = require("express");
 const http = require("http");
 const cors = require("cors");
 const { Server } = require("socket.io");
-const mongoose = require("mongoose");
 require("dotenv").config();
 
 // === Firebase setup ===
 const { ref, push } = require("firebase/database");
-const db = require("./firebase"); // Your firebase.js file
+const db = require("./firebase");
 
 // === Cloudinary & file upload ===
 const multer = require("multer");
@@ -26,29 +25,29 @@ cloudinary.config({
 const app = express();
 const server = http.createServer(app);
 
-// === Middleware
+// === CORS Setup ===
 app.use(
   cors({
-    origin: ["http://localhost:5173", "https://react-js-chat-app-1.onrender.com"],
+    origin: [
+      "http://localhost:5173",
+      "https://your-frontend-name.netlify.app", // Replace with actual Netlify URL
+    ],
     credentials: true,
   })
 );
-
 app.use(express.json());
 
-// === Multer: memory storage for Cloudinary streaming
+// === Multer setup ===
 const upload = multer({ storage: multer.memoryStorage() });
 
-// === File Upload Endpoint ===
+// === File Upload Route ===
 app.post("/upload", upload.single("image"), (req, res) => {
   if (!req.file) return res.status(400).json({ error: "No file uploaded" });
 
   const streamUpload = () =>
     new Promise((resolve, reject) => {
       const stream = cloudinary.uploader.upload_stream(
-        { folder: "chat_images",
-          resource_type: "raw", // <-- this is important for non-images
-         },
+        { folder: "chat_images", resource_type: "raw" },
         (error, result) => {
           if (result) resolve(result);
           else reject(error);
@@ -58,30 +57,32 @@ app.post("/upload", upload.single("image"), (req, res) => {
     });
 
   streamUpload()
-    .then((result) => res.json({ imageUrl: result.secure_url, fileName: result.original_filename  }))
+    .then((result) =>
+      res.json({
+        imageUrl: result.secure_url,
+        fileName: result.original_filename,
+      })
+    )
     .catch((err) => {
       console.error("Upload error:", err);
-      res.status(500).json({ error: "file upload failed" });
+      res.status(500).json({ error: "File upload failed" });
     });
 });
 
-// === MongoDB (optional)
-mongoose
-  .connect(process.env.MONGO_URI)
-  .then(() => console.log("✅ Connected to MongoDB Atlas"))
-  .catch((err) => console.error("❌ MongoDB connection error:", err));
-
-// === Socket.IO
+// === Socket.IO Setup ===
 const io = new Server(server, {
   cors: {
-    origin: ["http://localhost:5173"], // Update if frontend runs elsewhere
+    origin: [
+      "http://localhost:5173",
+      "https://your-frontend-name.netlify.app", // Replace this
+    ],
     methods: ["GET", "POST"],
+    credentials: true,
   },
 });
 
-let onlineUsers = {}; // username -> { socketId, avatar }
+let onlineUsers = {};
 
-// === Socket.IO Events
 io.on("connection", (socket) => {
   console.log("🟢 User connected:", socket.id);
 
@@ -109,16 +110,13 @@ io.on("connection", (socket) => {
       newMessage.message = message;
     }
 
-    // Save to Firebase
     push(ref(db, "messages/"), newMessage);
 
-    // Emit to recipient
     const toUser = onlineUsers[to];
     if (toUser) {
       io.to(toUser.socketId).emit("receive_message", newMessage);
     }
 
-    // Emit back to sender for acknowledgment
     const fromUser = onlineUsers[from];
     if (fromUser) {
       io.to(fromUser.socketId).emit("message_delivered", { to, timestamp });
@@ -157,11 +155,13 @@ io.on("connection", (socket) => {
   });
 });
 
-// === Health Check Endpoint
+// === Health check route
 app.get("/", (req, res) => {
-  res.send("✅ Server is running");
+  res.send("✅ Server is running.");
 });
 
-// === Start Server
+// === Start server
 const PORT = process.env.PORT || 5000;
-server.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+server.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+});
