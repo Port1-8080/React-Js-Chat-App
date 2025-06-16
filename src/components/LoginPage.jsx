@@ -78,7 +78,6 @@ const LoginPage = ({ onLoginSuccess, onSignupSuccess }) => {
             const { user, username } = await googleLogin();
             alert(`Welcome back, ${username}!`);
             onLoginSuccess(user); // Pass the user object to the parent component
-            window.location.href = "mes.html"; // Redirect after successful login
         } catch (err) {
             setError(err.message);
         }
