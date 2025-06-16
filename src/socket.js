@@ -1,6 +1,8 @@
 // src/socket.js
 import { io } from "socket.io-client";
 
-const socket = io("http://localhost:5000"); // backend server URL
+const socket = io("https://react-js-chat-app-1.onrender.com", {
+  transports: ["websocket"],
+});
 
 export default socket;
