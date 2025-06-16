@@ -30,6 +30,11 @@ function App() {
   const messageInputRef = useRef(null);
   const emojiPickerRef = useRef(null);
 
+  <LoginPage
+  onLoginSuccess={(user) => setAuthUser(user)}
+  onSignupSuccess={(user) => setAuthUser(user)} // Add this line
+/>
+
   // 🔁 Watch Firebase Auth
   useEffect(() => {
   const unsubscribe = onAuthStateChanged(auth, (user) => {
