@@ -27,7 +27,13 @@ const app = express();
 const server = http.createServer(app);
 
 // === Middleware
-app.use(cors());
+app.use(
+  cors({
+    origin: ["http://localhost:5173", "https://react-js-chat-app-1.onrender.com"],
+    credentials: true,
+  })
+);
+
 app.use(express.json());
 
 // === Multer: memory storage for Cloudinary streaming
